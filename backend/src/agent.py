@@ -52,7 +52,7 @@ async def my_agent(ctx: JobContext):
         stt=deepgram.STT(model="nova-3", language="multi"),
         # LLM: Google Gemini
         llm=google.LLM(
-            model="gemini-3.5-flash",
+            model="gemini-3.5-flash-lite",
         ),
         # Text-to-speech: Murf Falcon with Hindi voice
         tts=murf.TTS(
