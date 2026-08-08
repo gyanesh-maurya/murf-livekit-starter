@@ -36,6 +36,23 @@ export function ViewController({ appConfig }: ViewControllerProps) {
   const { isConnected, start } = useSessionContext();
   const { resolvedTheme } = useTheme();
 
+  const handleStartCall = async () => {
+    try {
+      // First, try to request microphone permission explicitly
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      start();
+    } catch (error: any) {
+      console.error('Microphone access error:', error);
+      // Import toast dynamically or use a simple alert if toast isn't imported here
+      // But sonner toast is available globally in the app, so we can import it.
+      const { toast } = await import('sonner');
+      toast.error('Microphone Permission Denied', {
+        description: 'DukaanSaathi needs microphone access to hear you. Please allow microphone access in your browser settings and try again.',
+        duration: 10000,
+      });
+    }
+  };
+
   return (
     <AnimatePresence mode="wait">
       {/* Welcome view */}
@@ -44,7 +61,7 @@ export function ViewController({ appConfig }: ViewControllerProps) {
           key="welcome"
           {...VIEW_MOTION_PROPS}
           startButtonText={appConfig.startButtonText}
-          onStartCall={start}
+          onStartCall={handleStartCall}
         />
       )}
       {/* Session view */}

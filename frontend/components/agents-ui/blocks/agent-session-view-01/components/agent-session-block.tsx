@@ -156,7 +156,7 @@ export interface AgentSessionView_01Props {
 }
 
 export function AgentSessionView_01({
-  preConnectMessage = 'Agent is listening, ask it a question',
+  preConnectMessage = 'DukaanSaathi connect kar raha hai... please wait.',
   supportsChatInput = true,
   supportsVideoInput = true,
   supportsScreenShare = true,
@@ -177,7 +177,7 @@ export function AgentSessionView_01({
 }: React.ComponentProps<'section'> & AgentSessionView_01Props) {
   const session = useSessionContext();
   const { messages } = useSessionMessages(session);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true); // Open transcript by default
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { state: agentState } = useAgent();
 
@@ -221,6 +221,25 @@ export function AgentSessionView_01({
               />
             </motion.div>
           )}
+        </AnimatePresence>
+      </div>
+      {/* Agent State Indicator */}
+      <div className="absolute top-6 left-0 right-0 z-[999] flex justify-center pointer-events-none">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={agentState}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="bg-background/80 text-foreground px-4 py-2 rounded-full border shadow-sm text-sm font-medium backdrop-blur-sm"
+          >
+            {agentState === 'connecting' && 'DukaanSaathi is connecting...'}
+            {agentState === 'initializing' && 'DukaanSaathi is getting ready...'}
+            {agentState === 'listening' && 'DukaanSaathi is listening to you...'}
+            {agentState === 'speaking' && 'DukaanSaathi is speaking...'}
+            {agentState === 'thinking' && 'DukaanSaathi is thinking...'}
+            {!agentState && 'Ready'}
+          </motion.div>
         </AnimatePresence>
       </div>
       {/* Tile layout */}

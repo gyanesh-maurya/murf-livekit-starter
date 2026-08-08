@@ -33,25 +33,25 @@ export interface AppConfig {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  companyName: 'Murf AI',
-  pageTitle: 'Voice Agent Starter',
-  pageDescription: 'A voice agent powered by Murf Falcon — the fastest TTS API',
+  companyName: 'DukaanSaathi',
+  pageTitle: 'DukaanSaathi Assistant',
+  pageDescription: 'Aapka local shop assistant, powered by Murf Falcon and LiveKit',
 
   supportsChatInput: true,
-  supportsVideoInput: true,
-  supportsScreenShare: true,
+  supportsVideoInput: false, // Turned off for simple voice-only UI
+  supportsScreenShare: false, // Turned off for simple voice-only UI
   isPreConnectBufferEnabled: true,
 
-  logo: '/murf-logo.svg',
-  accent: '#6366F1',
+  logo: '/murf-logo.svg', // Keeping the original logo or we could remove it, but let's keep it to satisfy the Murf requirement visually.
+  accent: '#10b981', // Emerald-500
   logoDark: '/murf-logo-dark.svg',
-  accentDark: '#818cf8',
-  startButtonText: 'Start talking',
+  accentDark: '#34d399', // Emerald-400
+  startButtonText: 'Baat Shuru Karein (Start)',
 
   // optional: audio visualization configuration
-  // audioVisualizerType: 'bar',
-  // audioVisualizerColor: '#002cf2',
-  // audioVisualizerColorDark: '#1fd5f9',
+  audioVisualizerType: 'bar',
+  audioVisualizerColor: '#10b981',
+  audioVisualizerColorDark: '#34d399',
   // audioVisualizerColorShift: 0.3,
   // audioVisualizerBarCount: 5,
   // audioVisualizerType: 'radial',

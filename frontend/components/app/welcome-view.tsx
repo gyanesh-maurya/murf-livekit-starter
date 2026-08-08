@@ -34,7 +34,7 @@ export const WelcomeView = ({
         <WelcomeImage />
 
         <p className="text-foreground max-w-prose pt-1 leading-6 font-medium">
-          Chat live with your voice AI agent
+          DukaanSaathi se baat karne ke liye button dabayein
         </p>
 
         <Button
@@ -47,18 +47,7 @@ export const WelcomeView = ({
       </section>
 
       <div className="fixed bottom-5 left-0 flex w-full items-center justify-center">
-        <p className="text-muted-foreground max-w-prose pt-1 text-xs leading-5 font-normal text-pretty md:text-sm">
-          Need help getting set up? Check out the{' '}
-          <a
-            target="_blank"
-            rel="noopener noreferrer"
-            href="https://docs.livekit.io/agents/start/voice-ai/"
-            className="underline"
-          >
-            Voice AI quickstart
-          </a>
-          .
-        </p>
+        {/* Removed the default LiveKit help text to keep the DukaanSaathi interface clean */}
       </div>
     </div>
   );
