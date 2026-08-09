@@ -12,12 +12,15 @@ from livekit.agents import (
     cli,
     tokenize,
     room_io,
+    function_tool,
 )
 from livekit.plugins import murf, silero, google, deepgram, noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from livekit.agents.llm import ChatMessage
 
 # Import the Day 2 Local Commerce system prompt
 from prompt import SYSTEM_PROMPT, SILENCE_REPROMPT, SILENCE_GOODBYE
+from db import init_db, lookup_customer, save_customer, delete_customer
 
 logger = logging.getLogger("agent")
 
@@ -25,8 +28,73 @@ load_dotenv(".env.local")
 
 
 class Assistant(Agent):
-    def __init__(self) -> None:
-        super().__init__(instructions=SYSTEM_PROMPT)
+    def __init__(self, user_id: str, custom_instructions: str = "") -> None:
+        full_instructions = f"{SYSTEM_PROMPT}\n\n# CURRENT CALL CONTEXT\n{custom_instructions}" if custom_instructions else SYSTEM_PROMPT
+        super().__init__(instructions=full_instructions)
+        self._user_id = user_id
+
+    @function_tool
+    async def lookup_customer(self, user_id: str) -> str:
+        """
+        Look up a customer by their user_id to check if they have called before.
+        Call this at the START of every conversation to check if the caller is known.
+        Returns the customer's saved data as JSON, or "not_found" if they are new.
+        """
+        result = lookup_customer(user_id)
+        if result is None:
+            import json
+            return json.dumps({"status": "not_found", "user_id": user_id})
+        import json
+        return json.dumps({"status": "found", "data": result}, ensure_ascii=False)
+
+    @function_tool
+    async def save_customer(
+        self,
+        user_id: str,
+        name: str,
+        language_preference: str,
+        facts: str,
+    ) -> str:
+        """
+        Save or update a customer's information after getting their explicit consent.
+        NEVER call this without asking the customer first.
+
+        Args:
+            user_id: The unique ID of the customer.
+            name: The customer's name.
+            language_preference: The language they prefer (e.g. "hindi", "english", "hinglish").
+            facts: A JSON string of key-value facts like past_orders, usual_quantities, preferred_delivery_slot, area.
+        """
+        import json
+        try:
+            facts_dict = json.loads(facts) if isinstance(facts, str) else facts
+        except json.JSONDecodeError:
+            facts_dict = {"note": facts}
+
+        result = save_customer(
+            user_id=user_id,
+            name=name,
+            language_preference=language_preference,
+            facts=facts_dict,
+        )
+        return json.dumps(
+            {"status": "saved", "data": result}, ensure_ascii=False
+        )
+
+    @function_tool
+    async def delete_customer(self, user_id: str) -> str:
+        """
+        Delete a customer's data when they ask to be forgotten.
+        Call this when a user says 'mera data delete karo', 'mujhe bhool jao', or 'forget me'.
+
+        Args:
+            user_id: The unique ID of the customer to delete.
+        """
+        deleted = delete_customer(user_id)
+        import json
+        if deleted:
+            return json.dumps({"status": "deleted", "user_id": user_id})
+        return json.dumps({"status": "not_found", "user_id": user_id})
 
 
 server = AgentServer()
@@ -34,6 +102,8 @@ server = AgentServer()
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
+    init_db()
+    logger.info("DukaanSaathi database initialized")
 
 
 server.setup_fnc = prewarm
@@ -56,7 +126,7 @@ async def my_agent(ctx: JobContext):
         ),
         # Text-to-speech: Murf Falcon with Hindi voice
         tts=murf.TTS(
-            voice="hi-IN-Anisha",
+            voice="Anisha",
             style="Conversation",
             tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
             text_pacing=True,
@@ -67,9 +137,40 @@ async def my_agent(ctx: JobContext):
         preemptive_generation=True,
     )
 
+    # Join the room and connect to the user
+    await ctx.connect()
+
+    # Safely wait for the caller participant to be present in the room
+    participant = await ctx.wait_for_participant()
+    user_id = participant.identity
+    logger.info(f"Customer connected with identity: {user_id}")
+
+    # Perform initial customer lookup directly in Python to avoid LLM tool-calling sequence bugs
+    customer_info = lookup_customer(user_id)
+    
+    if customer_info:
+        logger.info(f"Returning customer found: {customer_info['name']}")
+        facts_summary = ", ".join([f"{k}: {v}" for k, v in customer_info['facts'].items()]) if customer_info['facts'] else "पिछली बातें याद हैं"
+        greeting_instruction = (
+            f"CRITICAL OVERRIDE - RETURNING CUSTOMER DETECTED!\n"
+            f"Customer Name: {customer_info['name']}\n"
+            f"Saved Memory/Facts: {facts_summary}\n\n"
+            f"YOU MUST NOT USE A GENERIC GREETING!\n"
+            f"Your VERY FIRST SENTENCE MUST greet {customer_info['name']} BY NAME in Devanagari script (Hindi).\n"
+            f"Example opening: 'नमस्ते {customer_info['name']} जी! शर्मा जनरल स्टोर में आपका फिर से स्वागत है। मुझे याद है {facts_summary}। आज बताइए, आपकी क्या मदद करूँ?'"
+        )
+    else:
+        logger.info(f"New customer connected: {user_id}")
+        greeting_instruction = (
+            f"NEW CUSTOMER: This caller is visiting for the first time (User ID: '{user_id}').\n"
+            f"INSTRUCTION: Greet them as DukaanSaathi representing Sharma General Store in Laxmi Nagar. "
+            f"Say: 'नमस्ते! मैं हूँ दुकानसाथी, शर्मा जनरल स्टोर की तरफ से। आपको किसी प्रोडक्ट के बारे में जानना है, स्टोर की टाइमिंग चाहिए, या कुछ और मदद चाहिए? बताइए, मैं हूँ आपके लिए!' "
+            f"If they share their name or preferences, ask for consent before calling save_customer."
+        )
+
     # Start the session with the Local Commerce assistant
     await session.start(
-        agent=Assistant(),
+        agent=Assistant(user_id=user_id, custom_instructions=greeting_instruction),
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
@@ -83,10 +184,7 @@ async def my_agent(ctx: JobContext):
         ),
     )
 
-    # Join the room and connect to the user
-    await ctx.connect()
-
-    # Automatically greet the user when they connect (agent speaks first)
+    # Greet the user smoothly
     await session.generate_reply()
 
 

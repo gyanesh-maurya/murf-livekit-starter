@@ -44,9 +44,9 @@ export async function POST(req: Request) {
       );
     }
       
-    // Generate participant token
+    // Generate consistent participant identity for caller memory persistence across calls
     const participantName = 'user';
-    const participantIdentity = `voice_assistant_user_${Math.floor(Math.random() * 10_000)}`;
+    const participantIdentity = body?.user_id || 'demo_customer_1';
     const roomName = `voice_assistant_room_${Math.floor(Math.random() * 10_000)}`;
 
     const participantToken = await createParticipantToken(
