@@ -21,6 +21,7 @@ from livekit.agents.llm import ChatMessage
 # Import the Day 2 Local Commerce system prompt
 from prompt import SYSTEM_PROMPT, SILENCE_REPROMPT, SILENCE_GOODBYE
 from db import init_db, lookup_customer, save_customer, delete_customer
+from catalog import search_product, calculate_order_total
 
 logger = logging.getLogger("agent")
 
@@ -95,6 +96,32 @@ class Assistant(Agent):
         if deleted:
             return json.dumps({"status": "deleted", "user_id": user_id})
         return json.dumps({"status": "not_found", "user_id": user_id})
+
+    @function_tool
+    async def lookup_product(self, product_name: str) -> str:
+        """
+        Look up real-time stock availability, unit price, and rate timestamp for a specific product or item in Sharma General Store.
+        Call this whenever a customer asks about a product's price, availability, or stock (e.g. 'Atta ka price kya hai', 'Oil stock mein hai kya').
+
+        Args:
+            product_name: The name or keyword of the product to search (e.g. "atta", "mustard oil", "maggi", "cheeni", "milk").
+        """
+        import json
+        result = search_product(product_name)
+        return json.dumps(result, ensure_ascii=False)
+
+    @function_tool
+    async def calculate_bill(self, items_json: str) -> str:
+        """
+        Calculate total cost, subtotal, delivery eligibility (free delivery above ₹500, else ₹30), and estimated delivery time for a list of items.
+        Call this when a customer asks how much their order will cost, or asks for a total bill for multiple items.
+
+        Args:
+            items_json: A JSON string list of objects with 'name' and 'quantity' (e.g. '[{"name": "atta", "quantity": 1}, {"name": "sugar", "quantity": 2}]').
+        """
+        import json
+        result = calculate_order_total(items_json)
+        return json.dumps(result, ensure_ascii=False)
 
 
 server = AgentServer()

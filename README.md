@@ -16,6 +16,19 @@ Build a production voice AI agent in 5 minutes. Powered by the fastest TTS on th
 
 ---
 
+## 🛠️ Day 5 — Real Domain Tools (Local Commerce Track)
+
+DukaanSaathi (दुकानसाथी) is equipped with real-time domain function tools for local commerce:
+
+- **Data Source**: Local structured dataset (`backend/src/catalog.py`) containing real-time catalog items for Sharma General Store, Laxmi Nagar, Delhi (Atta, Edible Oil, Sugar, Milk, Spices, Snacks, Household items). Rates are valid as of **Aaj subah 9:00 AM (Today 9:00 AM IST)**.
+- **Available Tools**:
+  1. `lookup_product(product_name)`: Fetches live unit price, stock availability, and rate timestamp.
+  2. `calculate_bill(items_json)`: Computes order subtotal, delivery charges (Free above ₹500, else ₹30), total amount, and delivery time window (2-3 hours).
+  3. `save_customer` & `delete_customer`: Persistent memory management in SQLite (`customers.db`).
+- **Graceful Failure Handling**: If a product is unlisted or out of stock, the agent speaks out loud clearly (*"Yeh item abhi catalog mein nahi hai, aap Ramesh bhai se 98765 43210 par poocha sakte hain"*) without hallucinating prices.
+
+---
+
 ## Architecture
 
 ```mermaid
