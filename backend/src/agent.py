@@ -51,51 +51,50 @@ class Assistant(Agent):
     @function_tool
     async def save_customer(
         self,
-        user_id: str,
         name: str,
         language_preference: str,
         facts: str,
+        user_id: str = "",
     ) -> str:
         """
         Save or update a customer's information after getting their explicit consent.
         NEVER call this without asking the customer first.
 
         Args:
-            user_id: The unique ID of the customer.
-            name: The customer's name.
+            name: The customer's name (e.g. "Ramesh", "Pooja").
             language_preference: The language they prefer (e.g. "hindi", "english", "hinglish").
-            facts: A JSON string of key-value facts like past_orders, usual_quantities, preferred_delivery_slot, area.
+            facts: A JSON string or text of key-value facts like past_inquiries, usual_quantities, area.
         """
         import json
+        actual_user_id = self._user_id or user_id or "demo_customer_1"
         try:
             facts_dict = json.loads(facts) if isinstance(facts, str) else facts
         except json.JSONDecodeError:
             facts_dict = {"note": facts}
 
         result = save_customer(
-            user_id=user_id,
+            user_id=actual_user_id,
             name=name,
             language_preference=language_preference,
             facts=facts_dict,
         )
+        logger.info(f"Successfully saved customer data to DB for user_id={actual_user_id}, name={name}")
         return json.dumps(
-            {"status": "saved", "data": result}, ensure_ascii=False
+            {"status": "saved", "user_id": actual_user_id, "data": result}, ensure_ascii=False
         )
 
     @function_tool
-    async def delete_customer(self, user_id: str) -> str:
+    async def delete_customer(self, user_id: str = "") -> str:
         """
         Delete a customer's data when they ask to be forgotten.
         Call this when a user says 'mera data delete karo', 'mujhe bhool jao', or 'forget me'.
-
-        Args:
-            user_id: The unique ID of the customer to delete.
         """
-        deleted = delete_customer(user_id)
+        actual_user_id = self._user_id or user_id or "demo_customer_1"
+        deleted = delete_customer(actual_user_id)
         import json
         if deleted:
-            return json.dumps({"status": "deleted", "user_id": user_id})
-        return json.dumps({"status": "not_found", "user_id": user_id})
+            return json.dumps({"status": "deleted", "user_id": actual_user_id})
+        return json.dumps({"status": "not_found", "user_id": actual_user_id})
 
     @function_tool
     async def lookup_product(self, product_name: str) -> str:
