@@ -169,30 +169,61 @@ async def my_agent(ctx: JobContext):
     # Safely wait for the caller participant to be present in the room
     participant = await ctx.wait_for_participant()
     user_id = participant.identity
-    logger.info(f"Customer connected with identity: {user_id}")
+    logger.info(f"Participant connected with identity: {user_id}")
 
-    # Perform initial customer lookup directly in Python to avoid LLM tool-calling sequence bugs
-    customer_info = lookup_customer(user_id)
-    
-    if customer_info:
-        logger.info(f"Returning customer found: {customer_info['name']}")
-        facts_summary = ", ".join([f"{k}: {v}" for k, v in customer_info['facts'].items()]) if customer_info['facts'] else "पिछली बातें याद हैं"
-        greeting_instruction = (
-            f"CRITICAL OVERRIDE - RETURNING CUSTOMER DETECTED!\n"
-            f"Customer Name: {customer_info['name']}\n"
-            f"Saved Memory/Facts: {facts_summary}\n\n"
-            f"YOU MUST NOT USE A GENERIC GREETING!\n"
-            f"Your VERY FIRST SENTENCE MUST greet {customer_info['name']} BY NAME in Devanagari script (Hindi).\n"
-            f"Example opening: 'नमस्ते {customer_info['name']} जी! शर्मा जनरल स्टोर में आपका फिर से स्वागत है। मुझे याद है {facts_summary}। आज बताइए, आपकी क्या मदद करूँ?'"
+    # Parse metadata from dispatch job or room or participant attributes
+    import json
+    metadata_str = getattr(ctx.job, "metadata", "") or getattr(ctx.room, "metadata", "") or "{}"
+    try:
+        job_meta = json.loads(metadata_str) if isinstance(metadata_str, str) else {}
+    except Exception:
+        job_meta = {}
+
+    call_direction = job_meta.get("call_direction") or participant.attributes.get("call_direction", "inbound")
+    call_reason = job_meta.get("call_reason") or participant.attributes.get("call_reason", "")
+    customer_name = job_meta.get("customer_name") or participant.attributes.get("customer_name", "Customer")
+
+    is_outbound = call_direction == "outbound" or "outbound" in ctx.room.name.lower()
+    logger.info(f"Call direction: {call_direction}, reason: {call_reason}, customer_name: {customer_name}, is_outbound: {is_outbound}")
+
+    if is_outbound:
+        # ── OUTBOUND CALL GREETING (Day 6 Requirement) ──────────────────────
+        logger.info(f"📞 OUTBOUND CALL active for {customer_name} (Reason: {call_reason})")
+
+        outbound_opening = (
+            f"OUTBOUND CALL IN PROGRESS — THIS IS AN OUTBOUND CALL TO {customer_name}.\n\n"
+            f"INSTRUCTION:\n"
+            f"Your VERY FIRST SENTENCE MUST be the outbound greeting in Devanagari Hindi:\n"
+            f"'नमस्ते {customer_name} जी! मैं दुकानसाथी बोल रही हूँ, शर्मा जनरल स्टोर, लक्ष्मी नगर की तरफ से। "
+            f"आपके पिछले ऑर्डर के हिसाब से शायद आटा या तेल खत्म हो रहा होगा, तो याद दिलाने के लिए कॉल किया है। "
+            f"अगर आप यह कॉल नहीं चाहते तो बस बोलिए \"मुझे कॉल मत करो\" और मैं आगे से कॉल नहीं करूँगी।'\n\n"
+            f"After saying this opening sentence, ask if they would like to check prices or order anything today."
         )
+        greeting_instruction = outbound_opening
+
     else:
-        logger.info(f"New customer connected: {user_id}")
-        greeting_instruction = (
-            f"NEW CUSTOMER: This caller is visiting for the first time (User ID: '{user_id}').\n"
-            f"INSTRUCTION: Greet them as DukaanSaathi representing Sharma General Store in Laxmi Nagar. "
-            f"Say: 'नमस्ते! मैं हूँ दुकानसाथी, शर्मा जनरल स्टोर की तरफ से। आपको किसी प्रोडक्ट के बारे में जानना है, स्टोर की टाइमिंग चाहिए, या कुछ और मदद चाहिए? बताइए, मैं हूँ आपके लिए!' "
-            f"If they share their name or preferences, ask for consent before calling save_customer."
-        )
+        # ── INBOUND CALL GREETING ───────────────────────────────────────────
+        customer_info = lookup_customer(user_id)
+
+        if customer_info:
+            logger.info(f"Returning customer found: {customer_info['name']}")
+            facts_summary = ", ".join([f"{k}: {v}" for k, v in customer_info['facts'].items()]) if customer_info['facts'] else "पिछली बातें याद हैं"
+            greeting_instruction = (
+                f"CRITICAL OVERRIDE - RETURNING CUSTOMER DETECTED!\n"
+                f"Customer Name: {customer_info['name']}\n"
+                f"Saved Memory/Facts: {facts_summary}\n\n"
+                f"YOU MUST NOT USE A GENERIC GREETING!\n"
+                f"Your VERY FIRST SENTENCE MUST greet {customer_info['name']} BY NAME in Devanagari script (Hindi).\n"
+                f"Example opening: 'नमस्ते {customer_info['name']} जी! शर्मा जनरल स्टोर में आपका फिर से स्वागत है। मुझे याद है {facts_summary}। आज बताइए, आपकी क्या मदद करूँ?'"
+            )
+        else:
+            logger.info(f"New customer connected: {user_id}")
+            greeting_instruction = (
+                f"NEW CUSTOMER: This caller is visiting for the first time (User ID: '{user_id}').\n"
+                f"INSTRUCTION: Greet them as DukaanSaathi representing Sharma General Store in Laxmi Nagar. "
+                f"Say: 'नमस्ते! मैं हूँ दुकानसाथी, शर्मा जनरल स्टोर की तरफ से। आपको किसी प्रोडक्ट के बारे में जानना है, स्टोर की टाइमिंग चाहिए, या कुछ और मदद चाहिए? बताइए, मैं हूँ आपके लिए!' "
+                f"If they share their name or preferences, ask for consent before calling save_customer."
+            )
 
     # Start the session with the Local Commerce assistant
     await session.start(
@@ -210,7 +241,7 @@ async def my_agent(ctx: JobContext):
         ),
     )
 
-    # Greet the user smoothly
+    # Speak the outbound / initial greeting out loud immediately when connected
     await session.generate_reply()
 
 
