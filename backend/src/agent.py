@@ -20,7 +20,7 @@ from livekit.agents.llm import ChatMessage
 
 # Import the Day 2 Local Commerce system prompt
 from prompt import SYSTEM_PROMPT, SILENCE_REPROMPT, SILENCE_GOODBYE
-from db import init_db, lookup_customer, save_customer, delete_customer
+from db import init_db, lookup_customer, save_customer, delete_customer, create_escalation_ticket
 from catalog import search_product, calculate_order_total
 
 logger = logging.getLogger("agent")
@@ -122,6 +122,41 @@ class Assistant(Agent):
         result = calculate_order_total(items_json)
         return json.dumps(result, ensure_ascii=False)
 
+    @function_tool
+    async def create_escalation(
+        self,
+        customer_name: str,
+        category: str,
+        summary: str,
+        urgency: str = "medium",
+    ) -> str:
+        """
+        Create a human help request/ticket for the store owner (Ramesh Sharma).
+
+        CRITICAL PRE-CONDITION: DO NOT CALL THIS TOOL IN THE SAME TURN AS ASKING PERMISSION!
+        1. When a user reports a problem/dispute, FIRST ask them for permission: "क्या मैं रमेश भाई को आपकी यह रिक्वेस्ट भेज दूँ?"
+        2. DO NOT call this tool yet! Wait for the user's response in the NEXT turn.
+        3. ONLY call this tool IF AND ONLY IF the user explicitly says YES / HAAN / SURE / OK.
+        4. If the user says NO, DO NOT call this tool.
+
+        Args:
+            customer_name: The name of the customer needing human assistance.
+            category: Category of issue (e.g. "dispute", "bulk_order", "unlisted_product").
+            summary: Short, clear summary of what happened and what was checked (DO NOT include sensitive info like PINs, OTPs, card details).
+            urgency: Urgency level ('low', 'medium', 'high', 'urgent').
+        """
+        import json
+        actual_user_id = self._user_id or "demo_customer_1"
+        ticket_result = create_escalation_ticket(
+            user_id=actual_user_id,
+            customer_name=customer_name,
+            category=category,
+            summary=summary,
+            urgency=urgency,
+        )
+        logger.info(f"🚨 Human Help Ticket Created: {ticket_result}")
+        return json.dumps(ticket_result, ensure_ascii=False)
+
 
 server = AgentServer()
 
@@ -133,6 +168,23 @@ def prewarm(proc: JobProcess):
 
 
 server.setup_fnc = prewarm
+
+
+def format_facts_for_speech(facts: dict) -> str:
+    if not facts:
+        return "आप पहले भी दुकान से सामान ले चुके हैं"
+    parts = []
+    for k, v in facts.items():
+        val_str = ", ".join(v) if isinstance(v, list) else str(v)
+        if "order" in k.lower() or k == "past_orders":
+            parts.append(f"पिछली बार आपने {val_str} की बात की थी")
+        elif "delivery" in k.lower() or "slot" in k.lower():
+            parts.append(f"आपकी डिलीवरी {val_str} को चाहिए थी")
+        elif k.lower() in ("name", "user_id", "language_preference"):
+            continue
+        else:
+            parts.append(f"{k} {val_str}")
+    return " और ".join(parts) if parts else "आपकी पुरानी बातें याद हैं"
 
 
 @server.rtc_session(agent_name="my-agent")
@@ -207,14 +259,16 @@ async def my_agent(ctx: JobContext):
 
         if customer_info:
             logger.info(f"Returning customer found: {customer_info['name']}")
-            facts_summary = ", ".join([f"{k}: {v}" for k, v in customer_info['facts'].items()]) if customer_info['facts'] else "पिछली बातें याद हैं"
+            facts_summary = format_facts_for_speech(customer_info.get("facts", {}))
             greeting_instruction = (
                 f"CRITICAL OVERRIDE - RETURNING CUSTOMER DETECTED!\n"
                 f"Customer Name: {customer_info['name']}\n"
-                f"Saved Memory/Facts: {facts_summary}\n\n"
-                f"YOU MUST NOT USE A GENERIC GREETING!\n"
-                f"Your VERY FIRST SENTENCE MUST greet {customer_info['name']} BY NAME in Devanagari script (Hindi).\n"
-                f"Example opening: 'नमस्ते {customer_info['name']} जी! शर्मा जनरल स्टोर में आपका फिर से स्वागत है। मुझे याद है {facts_summary}। आज बताइए, आपकी क्या मदद करूँ?'"
+                f"Saved Memory Context: {facts_summary}\n\n"
+                f"IMPORTANT VOICE INSTRUCTIONS:\n"
+                f"1. Your VERY FIRST SENTENCE MUST greet {customer_info['name']} BY NAME in Devanagari script (Hindi).\n"
+                f"2. DO NOT output code formatting, dictionary keys, or brackets (never say 'past_orders:' or 'preferred_delivery_slot:').\n"
+                f"3. Speak naturally like a local shopkeeper.\n"
+                f"Example opening: 'नमस्ते {customer_info['name']} जी! शर्मा जनरल स्टोर में आपका फिर से स्वागत है। {facts_summary}। आज बताइए, आपकी क्या मदद करूँ?'"
             )
         else:
             logger.info(f"New customer connected: {user_id}")

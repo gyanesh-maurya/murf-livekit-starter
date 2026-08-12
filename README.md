@@ -16,6 +16,20 @@ Build a production voice AI agent in 5 minutes. Powered by the fastest TTS on th
 
 ---
 
+## 🚨 Day 7 — Human Escalation & Help Requests (Local Commerce Track)
+
+DukaanSaathi knows when to ask for human help and generate escalation tickets:
+
+- **Escalation Triggers**:
+  1. **Order & Payment Disputes**: Damaged items, payment issues, wrong item delivery, refund requests.
+  2. **Bulk Order Pricing**: Custom price negotiation or bulk quantity discounts beyond standard catalog rates.
+- **Permission First**: Asks explicit consent before creating the ticket (*"Kya main Ramesh bhai ko aapki yeh request ticket bhej doon?"*).
+- **Privacy & Safety**: Sanitizes all summaries; never stores sensitive info like PINs, OTPs, or passwords.
+- **Ticket Reference ID**: Generates a unique tracking ID (e.g. `TICK-8492`), saves it to SQLite (`tickets` table), and provides an honest resolution timeline (2 to 4 hours).
+- **Duplicate Prevention**: Re-uses and updates existing open tickets for the same caller and issue category instead of creating duplicates.
+
+---
+
 ## 🛠️ Day 5 — Real Domain Tools (Local Commerce Track)
 
 DukaanSaathi (दुकानसाथी) is equipped with real-time domain function tools for local commerce:

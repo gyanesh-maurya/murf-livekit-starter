@@ -18,6 +18,18 @@ def init_db():
             last_interaction TEXT
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tickets (
+            ticket_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            customer_name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            urgency TEXT DEFAULT 'medium',
+            status TEXT DEFAULT 'open',
+            created_at TEXT NOT NULL
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -77,3 +89,64 @@ def delete_customer(user_id: str) -> bool:
     conn.commit()
     conn.close()
     return deleted
+
+def create_escalation_ticket(user_id: str, customer_name: str, category: str, summary: str, urgency: str = "medium"):
+    import random
+    ticket_num = random.randint(1000, 9999)
+    ticket_id = f"TICK-{ticket_num}"
+    created_at = datetime.now().isoformat()
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Check for existing open ticket for this user and category to prevent duplicates
+    cursor.execute('''
+        SELECT ticket_id FROM tickets 
+        WHERE user_id = ? AND category = ? AND status = 'open'
+    ''', (user_id, category))
+    existing = cursor.fetchone()
+
+    if existing:
+        ticket_id = existing[0]
+        cursor.execute('''
+            UPDATE tickets 
+            SET summary = ?, urgency = ?, created_at = ? 
+            WHERE ticket_id = ?
+        ''', (summary, urgency, created_at, ticket_id))
+    else:
+        cursor.execute('''
+            INSERT INTO tickets (ticket_id, user_id, customer_name, category, summary, urgency, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'open', ?)
+        ''', (ticket_id, user_id, customer_name, category, summary, urgency, created_at))
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "status": "created",
+        "ticket_id": ticket_id,
+        "customer_name": customer_name,
+        "category": category,
+        "summary": summary,
+        "urgency": urgency,
+        "estimated_resolution": "2 to 4 hours"
+    }
+
+def get_open_tickets():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT ticket_id, customer_name, category, summary, urgency, created_at FROM tickets WHERE status = "open"')
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "ticket_id": r[0],
+            "customer_name": r[1],
+            "category": r[2],
+            "summary": r[3],
+            "urgency": r[4],
+            "created_at": r[5]
+        }
+        for r in rows
+    ]
+
