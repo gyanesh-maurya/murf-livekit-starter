@@ -40,10 +40,17 @@ export const WelcomeView = ({
         <Button
           size="lg"
           onClick={onStartCall}
-          className="mt-6 w-64 rounded-full font-mono text-xs font-bold tracking-wider uppercase"
+          className="mt-6 w-64 rounded-full font-mono text-xs font-bold tracking-wider uppercase cursor-pointer"
         >
           {startButtonText}
         </Button>
+
+        <a
+          href="/dashboard"
+          className="mt-4 inline-flex items-center gap-2 text-xs font-medium text-indigo-400 hover:text-indigo-300 bg-slate-900 border border-slate-800 hover:border-indigo-500/50 px-4 py-2 rounded-full transition shadow-sm"
+        >
+          📊 View Live Call Analytics Dashboard
+        </a>
       </section>
 
       <div className="fixed bottom-5 left-0 flex w-full items-center justify-center">

@@ -16,6 +16,17 @@ Build a production voice AI agent in 5 minutes. Powered by the fastest TTS on th
 
 ---
 
+## 📊 Day 8 — Call Analytics Dashboard (Local Commerce Track)
+
+DukaanSaathi features a real-time call performance dashboard and SQLite outcome logger:
+
+- **Success Definition**: A call is **Successful** if the caller completes a product lookup, bill calculation, customer memory save, or human escalation ticket. A call is **Failed** if the caller disconnects before completing any inquiry.
+- **Dynamic Metrics**: Tracks **Total Calls**, **Successful Calls**, **Failed Calls**, and **Success Rate (%)** live from SQLite (`calls` table in `customers.db`).
+- **Dashboard URL**: Open `http://localhost:3000/dashboard` to view live call metrics, duration breakdown, channel type (Browser vs Outbound SIP), and tool usage tags.
+- **Privacy Assurance**: Sanitizes log outputs; never logs or displays sensitive credentials, PINs, OTPs, or raw audio transcripts.
+
+---
+
 ## 🚨 Day 7 — Human Escalation & Help Requests (Local Commerce Track)
 
 DukaanSaathi knows when to ask for human help and generate escalation tickets:

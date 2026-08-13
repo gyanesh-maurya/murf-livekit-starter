@@ -30,6 +30,20 @@ def init_db():
             created_at TEXT NOT NULL
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS calls (
+            call_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            customer_name TEXT DEFAULT 'Customer',
+            channel TEXT DEFAULT 'browser',
+            status TEXT DEFAULT 'failed',
+            outcome_reason TEXT DEFAULT 'Call disconnected before inquiry completed',
+            tools_used TEXT DEFAULT '[]',
+            duration_seconds INTEGER DEFAULT 0,
+            started_at TEXT NOT NULL,
+            ended_at TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -149,4 +163,80 @@ def get_open_tickets():
         }
         for r in rows
     ]
+
+def record_call_start(call_id: str, user_id: str, customer_name: str = "Customer", channel: str = "browser"):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    started_at = datetime.now().isoformat()
+    cursor.execute('''
+        INSERT INTO calls (call_id, user_id, customer_name, channel, status, outcome_reason, tools_used, duration_seconds, started_at)
+        VALUES (?, ?, ?, ?, 'failed', 'In progress / disconnected early', '[]', 0, ?)
+        ON CONFLICT(call_id) DO UPDATE SET
+            user_id=excluded.user_id,
+            customer_name=excluded.customer_name,
+            channel=excluded.channel
+    ''', (call_id, user_id, customer_name, channel, started_at))
+    conn.commit()
+    conn.close()
+    return call_id
+
+def record_call_end(call_id: str, status: str, outcome_reason: str, tools_used: list, duration_seconds: int):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    ended_at = datetime.now().isoformat()
+    tools_json = json.dumps(tools_used or [])
+    cursor.execute('''
+        UPDATE calls
+        SET status = ?, outcome_reason = ?, tools_used = ?, duration_seconds = ?, ended_at = ?
+        WHERE call_id = ?
+    ''', (status, outcome_reason, tools_json, duration_seconds, ended_at, call_id))
+    conn.commit()
+    conn.close()
+
+def get_analytics_summary():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT COUNT(*) FROM calls')
+    total_calls = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM calls WHERE status = "successful"')
+    successful_calls = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM calls WHERE status = "failed"')
+    failed_calls = cursor.fetchone()[0]
+
+    success_rate = round((successful_calls / total_calls * 100), 1) if total_calls > 0 else 0.0
+
+    cursor.execute('''
+        SELECT call_id, user_id, customer_name, channel, status, outcome_reason, tools_used, duration_seconds, started_at
+        FROM calls
+        ORDER BY started_at DESC
+        LIMIT 20
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+
+    recent_calls = []
+    for r in rows:
+        recent_calls.append({
+            "call_id": r[0],
+            "user_id": r[1],
+            "customer_name": r[2],
+            "channel": r[3],
+            "status": r[4],
+            "outcome_reason": r[5],
+            "tools_used": json.loads(r[6]) if r[6] else [],
+            "duration_seconds": r[7],
+            "started_at": r[8]
+        })
+
+    return {
+        "total_calls": total_calls,
+        "successful_calls": successful_calls,
+        "failed_calls": failed_calls,
+        "success_rate": success_rate,
+        "recent_calls": recent_calls
+    }
+
 
