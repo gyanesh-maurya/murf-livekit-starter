@@ -7,8 +7,10 @@ from livekit.agents import (
     Agent,
     AgentSession,
     AgentServer,
+    ChatContext,
     JobContext,
     JobProcess,
+    RunContext,
     cli,
     tokenize,
     room_io,
@@ -19,7 +21,7 @@ from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.agents.llm import ChatMessage
 
 # Import the Day 2 Local Commerce system prompt
-from prompt import SYSTEM_PROMPT, SILENCE_REPROMPT, SILENCE_GOODBYE
+from prompt import SYSTEM_PROMPT, RETURNS_SPECIALIST_PROMPT, SILENCE_REPROMPT, SILENCE_GOODBYE
 from db import (
     init_db,
     lookup_customer,
@@ -171,6 +173,105 @@ class Assistant(Agent):
         )
         logger.info(f"🚨 Human Help Ticket Created: {ticket_result}")
         return json.dumps(ticket_result, ensure_ascii=False)
+
+    @function_tool()
+    async def transfer_to_returns_specialist(self, context: RunContext, issue_description: str) -> tuple[Agent, str]:
+        """Transfer the user to SevaSaathi for returns, refunds, damaged items, or replacement requests.
+
+        Args:
+            issue_description: Brief description of the customer's return/refund issue.
+        """
+        self._tools_used.append("transfer_to_returns_specialist")
+        logger.info(f"🔀 Handoff triggered from DukaanSaathi to SevaSaathi (Issue: {issue_description})")
+        specialist = ReturnsSpecialist(
+            user_id=self._user_id,
+            context_issue=issue_description,
+            tools_used_list=self._tools_used,
+            main_agent=self,
+            chat_ctx=self.chat_ctx.copy(exclude_instructions=True),
+        )
+        return specialist, "जी, मैं आपको हमारे रिटर्न और रिफंड स्पेशलिस्ट सेवासाथी के पास ट्रांसफर कर रही हूँ।"
+
+
+class ReturnsSpecialist(Agent):
+    """
+    Day 9 Specialist Agent: SevaSaathi (सेवासाथी)
+    Specializes strictly in Returns, Refunds, Damaged Goods Claims, and Replacement Requests for Sharma General Store.
+    """
+    def __init__(self, user_id: str, context_issue: str = "", tools_used_list: list = None, main_agent: Agent = None, chat_ctx: ChatContext = None) -> None:
+        specialist_instructions = (
+            f"{RETURNS_SPECIALIST_PROMPT}\n\n"
+            f"# HANDOFF CONTEXT FROM DUKAANSAATHI\n"
+            f"Customer User ID: '{user_id}'\n"
+            f"Reported Issue Context: '{context_issue}'\n"
+        )
+        init_kwargs = dict(
+            instructions=specialist_instructions,
+            tts=murf.TTS(
+                voice="Samar",
+                style="Conversation",
+                tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
+                text_pacing=True,
+            ),
+        )
+        if chat_ctx is not None:
+            init_kwargs["chat_ctx"] = chat_ctx
+        super().__init__(**init_kwargs)
+        self._user_id = user_id
+        self._tools_used = tools_used_list if tools_used_list is not None else []
+        self._main_agent = main_agent
+
+    async def on_enter(self) -> None:
+        logger.info("🤝 SevaSaathi entered session, generating takeover greeting...")
+        try:
+            await self.session.room.local_participant.set_attributes({
+                "active_agent": "SevaSaathi",
+                "agent_role": "Returns & Refunds Specialist (Male Agent)"
+            })
+        except Exception as attr_err:
+            logger.warning(f"Could not set active_agent attribute: {attr_err}")
+        await self.session.generate_reply(
+            instructions="Introduce yourself as SevaSaathi, the Returns and Refunds Specialist for Sharma General Store. Speak in MALE Hindi grammar (करूँगा, देखता हूँ). Ask what happened with their delivery."
+        )
+
+    @function_tool
+    async def create_escalation(
+        self,
+        customer_name: str,
+        category: str,
+        summary: str,
+        urgency: str = "medium",
+    ) -> str:
+        """
+        Create a human help request/ticket for the store owner (Ramesh Sharma) for complex or manual refund approvals.
+        Ask for user permission first before calling this tool.
+        """
+        self._tools_used.append("create_escalation")
+        import json
+        actual_user_id = self._user_id or "demo_customer_1"
+        ticket_result = create_escalation_ticket(
+            user_id=actual_user_id,
+            customer_name=customer_name,
+            category=category,
+            summary=summary,
+            urgency=urgency,
+        )
+        logger.info(f"🚨 Specialist SevaSaathi Created Ticket: {ticket_result}")
+        return json.dumps(ticket_result, ensure_ascii=False)
+
+    @function_tool()
+    async def transfer_back_to_main_agent(self, context: RunContext) -> tuple[Agent, str]:
+        """Transfer the caller back to DukaanSaathi when the user finishes their return/refund query and wants general grocery help."""
+        self._tools_used.append("transfer_back_to_main_agent")
+        logger.info("🔄 Handing back from SevaSaathi to main agent DukaanSaathi...")
+        try:
+            await self.session.room.local_participant.set_attributes({
+                "active_agent": "DukaanSaathi",
+                "agent_role": "Main Store Assistant (Female Agent)"
+            })
+        except Exception as attr_err:
+            logger.warning(f"Could not set active_agent attribute: {attr_err}")
+        return self._main_agent, "आपको वापस दुकानसाथी के पास ट्रांसफर कर रहा हूँ।"
 
 
 server = AgentServer()

@@ -16,6 +16,20 @@ Build a production voice AI agent in 5 minutes. Powered by the fastest TTS on th
 
 ---
 
+## 🔀 Day 9 — Hand Off to a Specialist Agent (Local Commerce Track)
+
+DukaanSaathi features real-time agent handoff to a specialized **Returns, Refunds & Delivery Support Agent (SevaSaathi / सेवासाथी)**:
+
+- **Main Agent (DukaanSaathi)**: Handles general grocery pricing, product stock lookup, store timings, and bill calculations.
+- **Specialist Agent (SevaSaathi)**: Dedicated expert agent for return requests, damaged product claims, non-perishable return policies, and refund processing.
+- **Seamless Transfer Protocol**:
+  1. Main agent detects return/refund request and announces handoff out loud: *"जी, मैं आपको हमारे रिटर्न और रिफंड स्पेशलिस्ट 'सेवासाथी' के पास ट्रांसफर कर रही हूँ।"*
+  2. Invokes `transfer_to_returns_specialist` tool which updates `session.update_agent(specialist)` live without breaking WebRTC audio or user connection.
+  3. Specialist introduces itself with context: *"नमस्ते! मैं सेवासाथी हूँ, शर्मा जनरल स्टोर की रिटर्न और रिफंड स्पेशलिस्ट..."*
+- **Hand Back Capability**: If the customer finishes their refund query and asks about grocery prices, `SevaSaathi` calls `transfer_back_to_main_agent` to return the call to `DukaanSaathi`!
+
+---
+
 ## 📊 Day 8 — Call Analytics Dashboard (Local Commerce Track)
 
 DukaanSaathi features a real-time call performance dashboard and SQLite outcome logger:

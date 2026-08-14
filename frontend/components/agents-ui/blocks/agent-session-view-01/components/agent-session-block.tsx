@@ -179,7 +179,9 @@ export function AgentSessionView_01({
   const { messages } = useSessionMessages(session);
   const [chatOpen, setChatOpen] = useState(true); // Open transcript by default
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const { state: agentState } = useAgent();
+  const agent = useAgent();
+  const agentState = agent.state;
+  const agentParticipant = agent.internal?.agentParticipant;
 
   const controls: AgentControlBarControls = {
     leave: true,
@@ -223,23 +225,34 @@ export function AgentSessionView_01({
           )}
         </AnimatePresence>
       </div>
-      {/* Agent State Indicator */}
+      {/* Active Agent Indicator */}
       <div className="absolute top-6 left-0 right-0 z-[999] flex justify-center pointer-events-none">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={agentState}
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="bg-background/80 text-foreground px-4 py-2 rounded-full border shadow-sm text-sm font-medium backdrop-blur-sm"
-          >
-            {agentState === 'connecting' && 'DukaanSaathi is connecting...'}
-            {agentState === 'initializing' && 'DukaanSaathi is getting ready...'}
-            {agentState === 'listening' && 'DukaanSaathi is listening to you...'}
-            {agentState === 'speaking' && 'DukaanSaathi is speaking...'}
-            {agentState === 'thinking' && 'DukaanSaathi is thinking...'}
-            {!agentState && 'Ready'}
-          </motion.div>
+          {(() => {
+            const agentAttr = agent.attributes?.active_agent ?? agentParticipant?.attributes?.active_agent;
+            const lastAgentMsg = [...messages].reverse().find((m) => m.from?.isLocal === false)?.message || '';
+            const isSevaSaathi = agentAttr === 'SevaSaathi' || lastAgentMsg.includes('मैं सेवासाथी हूँ');
+            const activeAgentLabel = isSevaSaathi
+              ? '🤝 SevaSaathi (Returns & Refunds Specialist — Male Agent)'
+              : '🎙️ DukaanSaathi (Main Store Assistant — Female Agent)';
+
+            return (
+              <motion.div
+                key={activeAgentLabel}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className={`px-4 py-2 rounded-full border shadow-xl text-xs font-semibold backdrop-blur-md flex items-center gap-2 pointer-events-auto transition-all ${
+                  isSevaSaathi
+                    ? 'bg-purple-950/90 text-purple-200 border-purple-500/50 shadow-purple-900/50'
+                    : 'bg-emerald-950/90 text-emerald-200 border-emerald-500/50 shadow-emerald-900/50'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-current animate-pulse"></span>
+                <span>{activeAgentLabel}</span>
+              </motion.div>
+            );
+          })()}
         </AnimatePresence>
       </div>
       {/* Tile layout */}
